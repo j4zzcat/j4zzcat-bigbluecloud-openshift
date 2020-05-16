@@ -1,0 +1,6 @@
+.DS_Store
+.vagrant
+.terraform*
+terraform.tfstate*
+secrets
+*.rsa*
