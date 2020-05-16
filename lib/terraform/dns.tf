@@ -3,7 +3,7 @@
 #
 
 locals {
-  bastion_fip       = module.vpc.bastion_fip
+  bastion_fip       = ibm_is_floating_ip.bastion_server.address
   installer_pip     = ibm_is_instance.installer.primary_network_interface[ 0 ].primary_ipv4_address
   load_balancer_pip = ibm_is_instance.load_balancer.primary_network_interface[ 0 ].primary_ipv4_address
   nat_server_fip    = ibm_compute_vm_instance.nat_server.ipv4_address
@@ -44,7 +44,7 @@ locals {
 resource "null_resource" "rm_hosts_file" {
   provisioner "local-exec" {
     command = <<-EOT
-      rm -f ${local.config_hosts_file}
+      rm -f ${local.hosts_file}
     EOT
   }
 }
@@ -87,7 +87,7 @@ resource "ibm_dns_zone" "vpc" {
 resource "ibm_dns_permitted_network" "vpc" {
   instance_id = ibm_resource_instance.dns_service.guid
   zone_id     = ibm_dns_zone.vpc.zone_id
-  vpc_crn     = module.vpc.crn
+  vpc_crn     = ibm_is_vpc.vpc.crn
   type        = "vpc"
 }
 

@@ -45,7 +45,7 @@ resource "ibm_compute_vm_instance" "nat_server" {
     type                = "ssh"
     bastion_user        = "root"
     bastion_private_key = file( var.bastion_key )
-    bastion_host        = module.vpc.bastion_fip
+    bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.ipv4_address_private
     user                = "root"
     private_key         = file( var.cluster_key )
@@ -53,9 +53,9 @@ resource "ibm_compute_vm_instance" "nat_server" {
 
   provisioner "remote-exec" {
     scripts = [
-      "${local.j4zzcat_ubuntu_18_scripts_dir}/upgrade_os.sh",
-      "${local.j4zzcat_ubuntu_18_scripts_dir}/install_nat_server.sh",
-      "${local.j4zzcat_ubuntu_18_scripts_dir}/do_reboot.sh" ]
+      "${local.scripts_dir}/upgrade_os.sh",
+      "${local.scripts_dir}/install_nat_server.sh",
+      "${local.scripts_dir}/do_reboot.sh" ]
   }
 }
 
@@ -81,7 +81,7 @@ resource "ibm_compute_vm_instance" "bootstrap" {
     type                = "ssh"
     bastion_user        = "root"
     bastion_private_key = file( var.bastion_key )
-    bastion_host        = module.vpc.bastion_fip
+    bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.ipv4_address_private
     user                = "root"
     private_key         = file( var.cluster_key )
@@ -119,7 +119,7 @@ resource "ibm_compute_vm_instance" "master" {
     type                = "ssh"
     bastion_user        = "root"
     bastion_private_key = file( var.bastion_key )
-    bastion_host        = module.vpc.bastion_fip
+    bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.ipv4_address_private
     user                = "root"
     private_key         = file( var.cluster_key )
@@ -153,7 +153,7 @@ resource "ibm_compute_vm_instance" "worker" {
     type                = "ssh"
     bastion_user        = "root"
     bastion_private_key = file( var.bastion_key )
-    bastion_host        = module.vpc.bastion_fip
+    bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.ipv4_address_private
     user                = "root"
     private_key         = file( var.cluster_key )
