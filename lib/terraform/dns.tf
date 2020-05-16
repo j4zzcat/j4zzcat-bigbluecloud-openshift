@@ -50,7 +50,7 @@ resource "null_resource" "rm_hosts_file" {
 }
 
 resource "local_file" "create_hosts_file" {
-  filename        = local.config_hosts_file
+  filename        = local.hosts_file
   file_permission = "0644"
   content = <<-EOT
     bastion_fip       = ${local.bastion_fip}
