@@ -15,9 +15,9 @@ data "ibm_is_image" "ubuntu_1804" {
 # Keys
 #
 
-resource "ibm_is_ssh_key" "cluster_key" {
+resource "ibm_is_ssh_key" "infra_key" {
   name           = "${var.cluster_name}-cluster-key"
-  public_key     = file( "${var.cluster_key}.pub" )
+  public_key     = file( "${var.infra_key}.pub" )
   resource_group = data.ibm_resource_group.resource_group.id
 }
 
@@ -194,7 +194,7 @@ resource "ibm_is_instance" "installer" {
   profile        = "bx2-2x8"
   vpc            = ibm_is_vpc.vpc.id
   zone           = ibm_is_subnet.vpc_subnet.zone
-  keys           = [ ibm_is_ssh_key.cluster_key.id ]
+  keys           = [ ibm_is_ssh_key.infra_key.id ]
   resource_group = data.ibm_resource_group.resource_group.id
 
   primary_network_interface {
@@ -210,7 +210,7 @@ resource "ibm_is_instance" "installer" {
     bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.primary_network_interface[ 0 ].primary_ipv4_address
     user                = "root"
-    private_key         = file( var.cluster_key )
+    private_key         = file( var.infra_key )
   }
 
   provisioner "remote-exec" {
@@ -236,7 +236,7 @@ resource "ibm_is_instance" "installer" {
   #   command = <<-EOT
   #     cat ${local.scripts_dir}/config_openshift_installation.sh \
   #       | ssh -o StrictHostKeyChecking=no \
-  #             -o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -i ${var.bastion_key} root@${ibm_is_floating_ip.bastion_server.address}" -i ${var.cluster_key} root@${ibm_is_instance.installer.primary_network_interface[ 0 ].primary_ipv4_address} \
+  #             -o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -i ${var.bastion_key} root@${ibm_is_floating_ip.bastion_server.address}" -i ${var.infra_key} root@${ibm_is_instance.installer.primary_network_interface[ 0 ].primary_ipv4_address} \
   #             bash -s - ${var.cluster_name} ${var.domain_name}
   #   EOT
   # }
@@ -257,7 +257,7 @@ resource "ibm_is_instance" "load_balancer" {
   profile        = "bx2-2x8"
   vpc            = ibm_is_vpc.vpc.id
   zone           = ibm_is_subnet.vpc_subnet.zone
-  keys           = [ ibm_is_ssh_key.cluster_key.id ]
+  keys           = [ ibm_is_ssh_key.infra_key.id ]
   resource_group = data.ibm_resource_group.resource_group.id
 
   primary_network_interface {
@@ -273,7 +273,7 @@ resource "ibm_is_instance" "load_balancer" {
     bastion_host        = ibm_is_floating_ip.bastion_server.address
     host                = self.primary_network_interface[ 0 ].primary_ipv4_address
     user                = "root"
-    private_key         = file( var.cluster_key )
+    private_key         = file( var.infra_key )
   }
 
   provisioner "remote-exec" {
