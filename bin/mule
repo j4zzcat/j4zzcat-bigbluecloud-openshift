@@ -48,7 +48,123 @@ require 'json'
 
 HOME_DIR = ENV[ 'C_HOME_DIR' ]
 
-class Mule
+module Mule
+  class Main
+    @@usage = <<~DOC
+
+      NAME:
+        mule - Create a simple openshift v4.3 cluster on IBM Cloud
+
+      USAGE:
+        mule provision infra --name=<name> --domain=<domain> --region=<region>
+          [--zone=<zone>] [--data-center=<dc>] [--resource-group=<name>]
+        mule provision openshift --pull-secret=<key>
+        mule (start|restart|stop|status) [<host>|<role>]
+        mule destroy [--clean]
+        mule (cli|env|ssh <host>)
+
+      OPTIONS:
+        <host>  The name of the host (bastion|installer|load_balancer|nat_server
+                bootstrap|master_1|master_2|master_3|worker_1|worker_2)
+        <role>  The role of the host (infra|bootstrap|masters|workers)
+
+      DOC
+
+    def initialize()
+      @log = Mule::Logger.new
+    end
+
+    def parse_and_run()
+      begin
+        options = Docopt::docopt( @@usage )
+      rescue Docopt::Exit => e
+        puts @@usage
+        exit 1
+      end
+
+      if options[ 'cli' ]
+        exec '/bin/bash'
+
+      elsif options[ 'env' ]
+        print 'export IBMCLOUD_API_KEY=$(security find-generic-password -l ibmcloud-api-key -w); '
+        print 'export IAAS_CLASSIC_USERNAME=$(security find-generic-password -l ibmcloud-iaas-classic-api-key | awk -F \'=\' \'/acct/{print substr($2,2,length($2)-2)}\'); '
+        print 'export IAAS_CLASSIC_API_KEY=$(security find-generic-password -l ibmcloud-iaas-classic-api-key -w)'
+
+      elsif options[ 'ssh' ]
+        host = options[ '<host>' ]
+        do_ssh( host )
+
+      elsif options[ 'provision' ]
+        if options[ 'infra' ]
+          do_provision_infra(
+            options[ '--name' ],
+            options[ '--domain' ],
+            options[ '--region' ],
+            options[ '--zone' ],
+            options[ '--data-center' ],
+            options[ '--resource-group' ]
+          )
+
+        elsif options[ 'openshift' ]
+          do_provision_openshift()
+        end
+
+      elsif options[ 'destroy' ]
+        do_destroy()
+      end # if ...
+    rescue => e
+      @log.error e
+    end # run()
+
+    def do_provision_infra( name, domain, region, zone, datacenter, resource_group )
+      @log.info "Validating input"
+
+      valid_name       = /.*/
+      valid_domain     = /^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9\-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$/
+      valid_region     = %w[ us-south us-east eu-gb eu-de ]
+      valid_zone       = %w[ 1 2 3 ]
+      valid_datacenter = %w[ dal01 dal02 dal05 dal06 dal07 dal09 dal10 dal12 dal13 wdc01 wdc04 wdc06 wdc07 lon02 lon04 lon05 lon06 fra02 fra04 fra05 ]
+
+      raise "invalid name"       if ( valid_name =~ name ).nil?
+      raise "invalid domain"     if ( valid_domain =~ domain ).nil?
+      raise "invalid region"     if ! valid_region.include? region
+      raise "invalid zone"       if ! zone.nil? and ! valid_zone.include? zone
+      raise "invalid datacenter" if ! datacenter.nil? and ! valid_datacenter
+
+    end
+
+
+
+
+  end # class Main
+
+
+
+  class Logger
+    def info( s )
+      puts s
+    end
+
+    def error( s )
+      puts "Error: #{s}"
+    end
+  end
+
+  class Utils
+    def self.remote_exec( host_pip, cmd )
+      cmd = "ssh -o ProxyCommand=\"ssh -W %h:%p -o StrictHostKeyChecking=no -i #{@state.bastion_key} root@#{@state.bastion_fip}\" -o StrictHostKeyChecking=no -i #{@state.cluster_key} root@#{host_pip} '#{cmd}'"
+
+      status = nil
+      Open3.popen2e( cmd, :chdir => "#{HOME_DIR}/lib/terraform" ) do | stdin, stdout_err, wait_thread |
+        while line = stdout_err.gets
+          puts line
+        end
+        status = wait_thread.value
+      end
+
+      status.exitstatus
+    end
+  end # class Utils
 
   class Terraform
     def initialize( cwd )
@@ -83,10 +199,10 @@ class Mule
   end # class Terraform
 
   class State
-    def initialize( terraform_state_file, terraform_tfvars_files, topology_file )
+    def initialize( terraform_state_file, terraform_tfvars_files, hosts_file)
       @terraform_state_file   = terraform_state_file
       @terraform_tfvars_files = terraform_tfvars_files
-      @topology_file          = topology_file
+      @hosts_file             = topology_file
 
       @cache = {}
     end
@@ -94,7 +210,7 @@ class Mule
     def method_missing( m, *args, &block )
       return @cache[ m ] if @cache.include? m
 
-      File.read( @topology_file ).each_line do | line |
+      File.read( @hosts_file).each_line do | line |
         item, value = line.gsub( /\s+/, '' ).split '='
         return @cache[ m ] = value if m.to_s == item
       end
@@ -144,118 +260,6 @@ class Mule
     end
 
   end # class
+end # module Mule
 
-  class Main
-    @@usage = <<~DOC
-
-      NAME:
-        mule - Create a simple openshift v4.3 cluster on IBM Cloud
-
-      USAGE:
-        mule provision (infra|openshift)
-        mule (start|restart|stop|status) [<host>|<role>]
-        mule destroy [--clean]
-        mule (cli|env|ssh <host>)
-
-      OPTIONS:
-        <host>  The name of the host (bastion|installer|load_balancer|nat_server
-                bootstrap|master_1|master_2|master_3|worker_1|worker_2)
-        <role>  The role of the host (infra|bootstrap|masters|workers)
-
-      DOC
-
-    def run()
-      begin
-        options = Docopt::docopt( @@usage )
-      rescue Docopt::Exit => e
-        puts @@usage
-        exit 1
-      end
-
-      infra_role     = %w[ bastion installer load_balancer nat_server ]
-      bootstrap_role = %w[ bootstrap ]
-      masters_role   = %w[ master_1 master_2 master_3 ]
-      workers_role   = %w[ worker_1 worker_2 ]
-      all_hosts      = infra_role + bootstrap_role + masters_role + workers_role
-
-      @state = Mule::State.new(
-        terraform_state_file   = "#{HOME_DIR}/lib/terraform/terraform.tfstate",
-        terraform_tfvars_files = "#{HOME_DIR}/lib/terraform/*.tfvars",
-        topology_file          = "#{HOME_DIR}/topology" )
-
-      if options[ 'cli' ]
-        exec '/bin/bash'
-
-      elsif options[ 'env' ]
-        print 'export IBMCLOUD_API_KEY=$(security find-generic-password -l ibmcloud-api-key -w); '
-        print 'export IAAS_CLASSIC_USERNAME=$(security find-generic-password -l ibmcloud-iaas-classic-api-key | awk -F \'=\' \'/acct/{print substr($2,2,length($2)-2)}\'); '
-        print 'export IAAS_CLASSIC_API_KEY=$(security find-generic-password -l ibmcloud-iaas-classic-api-key -w)'
-
-      elsif options[ 'ssh' ]
-        host = options[ '<host>' ]
-        host_pip = eval "@state.#{host}_pip"
-
-        exec "cd #{HOME_DIR}/lib/terraform; ssh -o ProxyCommand=\"ssh -W %h:%p -o StrictHostKeyChecking=accept-new -i #{@state.bastion_key} root@#{@state.bastion_fip}\" -o StrictHostKeyChecking=accept-new -i #{@state.cluster_key} root@#{host_pip}"
-
-      # elsif options[ 'start' ]
-      #   cli = Mule::IBMCloudCLI.new @state
-      #
-      #   all_hosts.each do | server |
-      #     id = eval "state.#{server}_id"
-      #     cli.is_instance_start server, id
-      #   end
-      #
-      # elsif options[ 'stop' ]
-      #   cli = Mule::IBMCloudCLI.new @state
-      #   all_hosts.each do | server |
-      #     id = eval "state.#{server}_id"
-      #     cli.is_instance_start server, id
-      #   end
-
-      elsif options[ 'provision' ]
-        if options[ 'infra' ]
-            terraform_dir = "#{HOME_DIR}/lib/terraform"
-            t = Mule::Terraform.new "#{HOME_DIR}/lib/terraform"
-            t.init
-            t.apply
-        elsif options[ 'openshift' ]
-          puts 'Starting bootstrap helper...'
-          remote_exec @state.installer_pip, "ruby /opt/openshift/bin/bootstrap_helper.rb >> ~/bootstrap_helper.log &"
-
-          puts 'Rebooting into RHCOS...'
-          remote_exec @state.bootstrap_pip, "curl http://#{@state.installer_pip}:7080/prepare/bootstrap | bash"
-          remote_exec @state.master_1_pip,  "curl http://#{@state.installer_pip}:7080/prepare/master | bash"
-          remote_exec @state.master_2_pip,  "curl http://#{@state.installer_pip}:7080/prepare/master | bash"
-          remote_exec @state.master_3_pip,  "curl http://#{@state.installer_pip}:7080/prepare/master | bash"
-          remote_exec @state.installer_pip, '/opt/openshift/bin/openshift-install --dir=/opt/openshift/install wait-for bootstrap-complete --log-level=info'
-        end
-
-      elsif options[ 'destroy' ]
-        t = Mule::Terraform.new "#{HOME_DIR}/lib/terraform"
-        rc = t.destroy
-
-        if options[ '--clean' ] and rc == 0
-          %x[ rm -rf #{HOME_DIR}/lib/terraform/.terraform #{HOME_DIR}/lib/terraform/terraform.tfstate* ]
-
-        end
-      end
-    end # run()
-
-    def remote_exec( host_pip, cmd )
-      cmd = "ssh -o ProxyCommand=\"ssh -W %h:%p -o StrictHostKeyChecking=no -i #{@state.bastion_key} root@#{@state.bastion_fip}\" -o StrictHostKeyChecking=no -i #{@state.cluster_key} root@#{host_pip} '#{cmd}'"
-
-      status = nil
-      Open3.popen2e( cmd, :chdir => "#{HOME_DIR}/lib/terraform" ) do | stdin, stdout_err, wait_thread |
-        while line = stdout_err.gets
-          puts line
-        end
-        status = wait_thread.value
-      end
-
-      status.exitstatus
-    end
-  end # class Main
-
-end # class Mule
-
-Mule::Main.new.run
+Mule::Main.new.parse_and_run
