@@ -24,7 +24,7 @@ resource "ibm_compute_vm_instance" "nat_server" {
   hostname             = "nat-server"
   domain               = "${var.cluster_name}.${var.domain_name}"
   os_reference_code    = "UBUNTU_18_64"
-  datacenter           = var.data_center_name
+  datacenter           = var.datacenter_name
   hourly_billing       = true
   local_disk           = false
   private_network_only = false
@@ -63,7 +63,7 @@ resource "ibm_compute_vm_instance" "bootstrap" {
   hostname             = "bootstrap"
   domain               = "${var.cluster_name}.${var.domain_name}"
   os_reference_code    = "UBUNTU_18_64"
-  datacenter           = var.data_center_name
+  datacenter           = var.datacenter_name
   hourly_billing       = true
   private_network_only = true
   cores                = 1
@@ -101,7 +101,7 @@ resource "ibm_compute_vm_instance" "master" {
   hostname             = "master-${count.index + 1}"
   domain               = "${var.cluster_name}.${var.domain_name}"
   os_reference_code    = "UBUNTU_18_64"
-  datacenter           = var.data_center_name
+  datacenter           = var.datacenter_name
   hourly_billing       = true
   private_network_only = true
   cores                = 1
@@ -139,7 +139,7 @@ resource "ibm_compute_vm_instance" "worker" {
   hostname             = "worker-${count.index + 1}"
   domain               = "${var.cluster_name}.${var.domain_name}"
   os_reference_code    = "UBUNTU_18_64"
-  datacenter           = var.data_center_name
+  datacenter           = var.datacenter_name
   hourly_billing       = true
   private_network_only = true
   cores                = 1

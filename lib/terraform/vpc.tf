@@ -1,6 +1,6 @@
 resource "ibm_resource_group" "resource_group" {
   count = var.resource_group_name == null ? 1 : 0
-  name  = "${var.cluster_name}.${var.domain_name}"
+  name  = "${var.name}.${var.domain_name}"
 }
 
 data "ibm_resource_group" "resource_group" {
@@ -16,7 +16,7 @@ data "ibm_is_image" "ubuntu_1804" {
 #
 
 resource "ibm_is_ssh_key" "infra_key" {
-  name           = "${var.cluster_name}-cluster-key"
+  name           = "${var.name}-cluster-key"
   public_key     = file( "${var.infra_key}.pub" )
   resource_group = data.ibm_resource_group.resource_group.id
 }
@@ -33,7 +33,7 @@ resource "ibm_is_ssh_key" "bastion_key" {
 
 resource "ibm_is_vpc" "vpc" {
   resource_group = data.ibm_resource_group.resource_group.id
-  name           = var.cluster_name
+  name           = var.name
   classic_access = false
 }
 
@@ -237,7 +237,7 @@ resource "ibm_is_instance" "installer" {
   #     cat ${local.scripts_dir}/config_openshift_installation.sh \
   #       | ssh -o StrictHostKeyChecking=no \
   #             -o ProxyCommand="ssh -W %h:%p -o StrictHostKeyChecking=no -i ${var.bastion_key} root@${ibm_is_floating_ip.bastion_server.address}" -i ${var.infra_key} root@${ibm_is_instance.installer.primary_network_interface[ 0 ].primary_ipv4_address} \
-  #             bash -s - ${var.cluster_name} ${var.domain_name}
+  #             bash -s - ${var.name} ${var.domain_name}
   #   EOT
   # }
   #
@@ -325,10 +325,10 @@ resource "ibm_is_instance" "load_balancer" {
       backend openshift_api_server
         mode tcp
         balance source
-        server bootstrap bootstrap.${var.cluster_name}.${var.domain_name}:6443
-        server master-1 master-1.${var.cluster_name}.${var.domain_name}:6443
-        server master-2 master-2.${var.cluster_name}.${var.domain_name}:6443
-        server master-3 master-3.${var.cluster_name}.${var.domain_name}:6443
+        server bootstrap bootstrap.${var.name}.${var.domain_name}:6443
+        server master-1 master-1.${var.name}.${var.domain_name}:6443
+        server master-2 master-2.${var.name}.${var.domain_name}:6443
+        server master-3 master-3.${var.name}.${var.domain_name}:6443
 
       frontend machine_config_server
         mode tcp
@@ -339,10 +339,10 @@ resource "ibm_is_instance" "load_balancer" {
       backend machine_config_server
         mode tcp
         balance source
-        server bootstrap bootstrap.${var.cluster_name}.${var.domain_name}:22623
-        server master-1 master-1.${var.cluster_name}.${var.domain_name}:22623
-        server master-2 master-2.${var.cluster_name}.${var.domain_name}:22623
-        server master-3 master-3.${var.cluster_name}.${var.domain_name}:22623
+        server bootstrap bootstrap.${var.name}.${var.domain_name}:22623
+        server master-1 master-1.${var.name}.${var.domain_name}:22623
+        server master-2 master-2.${var.name}.${var.domain_name}:22623
+        server master-3 master-3.${var.name}.${var.domain_name}:22623
 
       frontend ingress_http
         mode tcp
@@ -352,8 +352,8 @@ resource "ibm_is_instance" "load_balancer" {
 
       backend ingress_http
         mode tcp
-        server worker-1 worker-1.${var.cluster_name}.${var.domain_name}:80
-        server worker-2 worker-2.${var.cluster_name}.${var.domain_name}:80
+        server worker-1 worker-1.${var.name}.${var.domain_name}:80
+        server worker-2 worker-2.${var.name}.${var.domain_name}:80
 
       frontend ingress_https
         mode tcp
@@ -363,8 +363,8 @@ resource "ibm_is_instance" "load_balancer" {
 
       backend ingress_https
         mode tcp
-        server worker-1 worker-1.${var.cluster_name}.${var.domain_name}:443
-        server worker-2 worker-2.${var.cluster_name}.${var.domain_name}:443
+        server worker-1 worker-1.${var.name}.${var.domain_name}:443
+        server worker-2 worker-2.${var.name}.${var.domain_name}:443
     EOT
   }
 }

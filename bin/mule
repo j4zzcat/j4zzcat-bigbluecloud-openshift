@@ -56,10 +56,10 @@ module Mule
         mule - Create a simple openshift v4.3 cluster on IBM Cloud
 
       USAGE:
-        mule provision infra --name=<name> --domain=<domain> --region=<region>
-          [--zone=<zone>] [--data-center=<dc>] [--resource-group=<name>]
-          [transit-gateway=<name>] [-v]
-        mule provision openshift --pull-secret=<key> [-v]
+        mule provision infra [-v] --name=<name> --domain=<domain> --region=<region>
+          [--zone=<zone>] [--data-center=<dc>] [--resource-group-name=<name>]
+          [--transit-gateway-id=<id>]
+        mule provision openshift [-v] --pull-secret=<key>
         mule (start|restart|stop|status) [<host>|<role>] [-v]
         mule destroy [--clean] [-v]
         mule (cli|env|ssh <host>)
@@ -103,7 +103,8 @@ module Mule
             options[ '--region' ],
             options[ '--zone' ],
             options[ '--data-center' ],
-            options[ '--resource-group' ]
+            options[ '--resource-group-name' ],
+            options[ '--transit-gateway-id' ]
           )
 
         elsif options[ 'openshift' ]
@@ -117,10 +118,10 @@ module Mule
       @log.error e
     end # run()
 
-    def do_provision_infra( name, domain, region, zone, datacenter, resource_group )
+    def do_provision_infra( name, domain, region, zone, datacenter, resource_group_name, transit_gateway_id )
       @log.info "Validating input"
 
-      valid_name           = /.*/
+      valid_name           = /^[a-zA-Z0-9\-]+$/
       valid_domain         = /^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9\-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$/
       valid_region         = %w[ us-south us-east eu-gb eu-de ]
       valid_zone           = %w[ 1 2 3 ]
@@ -128,33 +129,48 @@ module Mule
                                'us-east'  => %w[ wdc01 wdc04 wdc06 wdc07 ],
                                'eu-gb'    => %w[ lon02 lon04 lon05 lon06 ],
                                'eu-fr'    => %w[ fra02 fra04 fra05 ] }
+      valid_resource_group = /^[a-zA-Z0-9\-_ ]+$/
 
       zone       = valid_zone.sample if zone.nil?
       datacenter = valid_datacenter[ region ].sample if datacenter.nil?
 
-      raise "invalid name"       if ( valid_name =~ name ).nil?
-      raise "invalid domain"     if ( valid_domain =~ domain ).nil?
-      raise "invalid region"     if ! valid_region.include? region
-      raise "invalid zone"       if ! valid_zone.include? zone
-      raise "invalid datacenter" if ! valid_datacenter[ region ].include? datacenter
+      raise "invalid name"           if ( valid_name =~ name ).nil?
+      raise "invalid domain"         if ( valid_domain =~ domain ).nil?
+      raise "invalid region"         if ! valid_region.include? region
+      raise "invalid zone"           if ! valid_zone.include? zone
+      raise "invalid datacenter"     if ! valid_datacenter[ region ].include? datacenter
 
-      # gen keys if needed
-      # resource_group_id
-      # transit_gateway_id
+      cli = Mule::IBMCloudCLI.new region
+      # if resource_group_name.nil?
+      #   cli.login
+      #   resource_group_name = "#{name}-cluster"
+      #   cli.exec resource_group_name
+      # end
+
+      if transit_gateway_id.nil?
+        cli.login
+        locations = cli.exec 'tg locations', :raw
+        locations.each do | location |
+          puts location
+        end
+      end
+
+      exit
+
 
       s = Mule::State.new Dir.cwd
-      s.vars {
-        "name"               => name,
-        "domain_name"        => domain,
-        "region_name"        => region,
-        "zone_name"          => zone,
-        "datacenter_name"    => datacenter,
-        "infra_key"          => infra_key,
-        "bastion_key"        => bastion_key,
-        "resource_group_id"  => resource_group_id,
-        "transit_gateway_id" => transit_gateway_id }
+      s.vars( {
+        'name'                => name,
+        'domain_name'         => domain,
+        'region_name'         => region,
+        'zone_name'           => zone,
+        'datacenter_name'     => datacenter,
+        'infra_key'           => infra_key,
+        'bastion_key'         => bastion_key,
+        'resource_group_name' => resource_group_name,
+        'transit_gateway_id'  => transit_gateway_id } )
 
-      t = Mule::Terraform.new "#{HOME_DIR}/lib/terraform", s.state_file
+      t = Mule::Terraform.new s, "#{HOME_DIR}/lib/terraform"
       t.apply 'vpc', %w[
         ibm_is_ssh_key.infra_key
         ibm_is_vpc.vpc
