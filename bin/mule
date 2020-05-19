@@ -1,7 +1,8 @@
 #! /usr/bin/env bash
 
-export DOCKER_IMAGE=j4zzcat/ibmcloud-cli:latest
-export   C_REPO_DIR=/h/repo
+export DOCKER_IMAGE=j4zzcat/bigbluecloud-runtime:latest
+export  C_REPOS_DIR=/h/repos
+export   C_REPO_DIR=${C_REPOS_DIR}/sud
 export    C_CWD_DIR=/h/cwd
 export   C_HOME_DIR=${C_REPO_DIR}
 
@@ -19,6 +20,8 @@ if [ ! -f '/.dockerenv' ]; then
   exec docker run --rm -it \
     -v ${CWD_DIR}:${C_CWD_DIR}:rw \
     -v ${REPO_DIR}:${C_REPO_DIR}:rw \
+    -v ${HOME_DIR}/../j4zzcat-bigbluecloud:${C_REPOS_DIR}/j4zzcat-bigbluecloud \
+    -e RUBYLIB=${C_REPOS_DIR}/j4zzcat-bigbluecloud/src/client/lib \
     -e IBMCLOUD_API_KEY=${IBMCLOUD_API_KEY} \
     -e IAAS_CLASSIC_USERNAME=${IAAS_CLASSIC_USERNAME} \
     -e IAAS_CLASSIC_API_KEY=${IAAS_CLASSIC_API_KEY} \
@@ -45,6 +48,7 @@ require 'open3'
 require 'docopt'
 require 'ostruct'
 require 'json'
+require 'bigbluecloud'
 
 HOME_DIR = ENV[ 'C_HOME_DIR' ]
 
@@ -272,44 +276,6 @@ module Mule
     end
   end # class
 
-  class IBMCloudCLI
-    def initialize( state )
-      ENV[ 'IBMCLOUD_COLOR' ] = 'false'
-      @state = state
-      login
-    end
-
-    def login
-      puts "Logging in to IBM Cloud..."
-      %x[ ibmcloud login -r #{@state.region_name}
-          ibmcloud is target --gen 2 ]
-    end
-
-    def is_instance_start( name, id )
-      print "Starting instance '#{name}' id=#{id}..."
-      rc = %x[ ibmcloud is instance-start #{id} 2>&1 >/dev/null
-               echo ${?} ].chomp
-
-      if rc == "0"
-        puts " Ok"
-      else
-        puts " Error, rc=#{rc}"
-      end
-    end
-
-    def is_instance_stop( name, id )
-      print "Stopping instance '#{name}' id=#{id}..."
-      rc = %x[ ibmcloud is instance-stop #{id} 2>&1 >/dev/null
-               echo ${?} ].chomp
-
-      if rc == "0"
-        puts " Ok"
-      else
-        puts " Error, rc=#{rc}"
-      end
-    end
-
-  end # class
 end # module Mule
 
 Mule::Main.new.parse_and_run
