@@ -144,7 +144,13 @@ module Mule
       raise "invalid zone"           if ! valid_zone.include? zone
       raise "invalid datacenter"     if ! valid_datacenter[ region ].include? datacenter
 
-      cli = Mule::IBMCloudCLI.new region
+      cli = BigBlueCloud::Cli.new(
+        region,
+        ENV[ 'IBMCLOUD_API_KEY' ],
+        ENV[ 'IAAS_CLASSIC_USERNAME' ],
+        ENV[ 'IAAS_CLASSIC_API_KEY' ] )
+
+
       # if resource_group_name.nil?
       #   cli.login
       #   resource_group_name = "#{name}-cluster"
@@ -153,7 +159,7 @@ module Mule
 
       if transit_gateway_id.nil?
         cli.login
-        locations = cli.exec 'tg locations', :raw
+        locations = cli.execute 'tg locations', raw: true
         locations.each do | location |
           puts location
         end
