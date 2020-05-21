@@ -17,8 +17,20 @@ resource "ibm_is_subnet" "subnet" {
 
 resource "ibm_is_security_group" "sg" {
   count = 10
-  name = "sg-${count.index}"
-  vpc  = ibm_is_vpc.vpc.id
+  name  = "sg-${count.index}"
+  vpc   = ibm_is_vpc.vpc.id
+}
+
+resource "ibm_is_security_group_rule" "sgr" {
+  count      = 10
+  group      = ibm_is_security_group.sg[ count.index ].id
+  direction  = "inbound"
+  remote     = "0.0.0.0/0"
+
+  tcp {
+    port_min = 1000 + count.index
+    port_max = 1000 + count.index
+  }
 }
 
 data "ibm_is_image" "ubuntu_1804" {
