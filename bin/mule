@@ -160,9 +160,11 @@ module Mule
 
       if transit_gateway_id.nil?
         cli.login
-        locations = %x[ #{cli.execute 'tg locations', raw: true} | tail -n + 3 | awk '{print $1}' ].chomp
-        locations.each_line do | location |
-          puts location
+        rc, locations = cli.execute "ibmcloud tg locations | tail -n +3 | awk '{print $1}'", raw: true
+        if rc == 0
+          locations.split( "\n" ).each do | location |
+            puts location
+          end
         end
       end
 
